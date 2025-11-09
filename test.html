@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Firebase Connection Test</title>
+    <style>
+        body { font-family: sans-serif; display: grid; place-content: center; height: 100vh; margin: 0; text-align: center; }
+        #status { font-size: 1.5rem; padding: 2rem; border-radius: 1rem; max-width: 80vw; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+
+    <div id="status">Testing Connection...</div>
+
+    <script type="module">
+        // 导入 Firebase 模块
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
+
+        // ---  ---
+        const firebaseConfig = {
+          apiKey: "AIzaSyCy9pbKQw16SDhEF4vvAMb27vl0tp00i_U",
+          authDomain: "memorybottle-final.firebaseapp.com",
+          projectId: "memorybottle-final",
+          storageBucket: "memorybottle-final.firebasestorage.app",
+          messagingSenderId: "177913004343",
+          appId: "1:177913004343:web:69e01d3c2fc43e001d5ab2",
+          measurementId: "G-9T3PTTE3E8"
+        };
+
+        const statusDiv = document.getElementById('status');
+
+        async function testFirebase() {
+            try {
+                console.log("Initializing Firebase with config:", firebaseConfig);
+                if (!firebaseConfig.apiKey) {
+                     throw new Error("Firebase config is empty!");
+                }
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+                
+                console.log("Attempting to sign in anonymously...");
+                const userCredential = await signInAnonymously(auth);
+                
+                console.log("Success! User UID:", userCredential.user.uid);
+                statusDiv.textContent = "✅ Success! Connection is OK. The problem is in the complex index.html code.";
+                statusDiv.className = "success";
+
+            } catch (error) {
+                console.error("Firebase Test Failed:", error);
+                statusDiv.textContent = `❌ Failed! Error: ${error.message}. The problem is with the Firebase project or permissions.`;
+                statusDiv.className = "error";
+            }
+        }
+
+        testFirebase();
+    </script>
+</body>
+</html>
