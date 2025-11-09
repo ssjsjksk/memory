@@ -61,15 +61,15 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, serverTimestamp, query, limit, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
         
-        // --- 这是你自己的钥匙，已经为你填好了 ---
+        // --- 这是你全新的、干净的钥匙，已经为你填好了 ---
         const firebaseConfig = {
-          apiKey: "AIzaSyCsekG7liDAgUGmRXFptc1enxQ25GIVS0",
-          authDomain: "memorydrifter-d4720.firebaseapp.com",
-          projectId: "memorydrifter-d4720",
-          storageBucket: "memorydrifter-d4720.firebasestorage.app",
-          messagingSenderId: "961926341645",
-          appId: "1:961926341645:web:e39ae44f08f1cb8b54a144",
-          measurementId: "G-WLDBT0M5SH"
+          apiKey: "AIzaSyCy9pbKQw16SDhEF4vvAMb27vl0tp00i_U",
+          authDomain: "memorybottle-final.firebaseapp.com",
+          projectId: "memorybottle-final",
+          storageBucket: "memorybottle-final.firebasestorage.app",
+          messagingSenderId: "177913004343",
+          appId: "1:177913004343:web:69e01d3c2fc43e001d5ab2",
+          measurementId: "G-9T3PTTE3E8"
         };
         
         let db, auth, userId, scene, camera, renderer, particles, mouseX = 0, mouseY = 0, audioInitialized = false;
@@ -83,7 +83,7 @@
             loadingOverlay.addEventListener('click', async () => {
                 await initAudio();
                 loadingOverlay.classList.add('opacity-0');
-                setTimeout(() => loadingOverlay.classList.add('hidden'), 500);
+                setTimeout(() => { loadingOverlay.classList.add('hidden'); showView('home-view'); }, 500);
             }, { once: true });
         }
 
