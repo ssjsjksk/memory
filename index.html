@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>记忆漂流瓶</title>
+    <!-- 引入Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 引入Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- 引入Tone.js (背景音乐) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+
+    <!-- 引入字体 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+    
+    <style>
+        /* 设定主题色 */
+        :root {
+            --color-bg: #0b1a39; /* 星空蓝 */
+            --color-particle: #5f4b8b; /* 紫雾色 */
+            --color-glow: #f5d6a5; /* 浅金色 */
+            --color-text: #dfe8f7; /* 银白色 */
+        }
+        
+        /* 标题字体 */
+        .font-title {
+            font-family: 'ZCOOL+KuaiLe', cursive;
+        }
+        
+        /* 正文字体 */
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background-color: var(--color-bg);
+            color: var(--color-text);
+            overflow: hidden; /* 隐藏滚动条 */
+        }
+        
+        /* 3D背景画布 */
+        #three-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+        
+        /* 玻璃拟态 (Glassmorphism) 效果 */
+        .glass-ui {
+            background: rgba(255, 255, 255, 0.05); /* 极淡的背景色 */
+            backdrop-filter: blur(12px) saturate(150%);
+            -webkit-backdrop-filter: blur(12px) saturate(150%);
+            border: 1px solid rgba(223, 232, 247, 0.2); /* 银白色边框 */
+            border-radius: 1.5rem; /* 圆角 */
+            box-shadow: 0 8px 32px 0 rgba(11, 26, 57, 0.3); /* 阴影 */
+        }
+        
+        /* 发光按钮 */
+        .btn-glow {
+            transition: all 0.3s ease;
+            box-shadow: 0 0 15px 0px var(--color-glow);
+        }
+        .btn-glow:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 25px 5px var(--color-glow);
+        }
+        
+        /* 文本区域样式 */
+        textarea::placeholder {
+            color: rgba(223, 232, 247, 0.5);
+        }
+        textarea:focus {
+            outline: none;
+            border-color: var(--color-glow);
+            box-shadow: 0 0 10px 0px var(--color-glow);
+        }
+
+        /* 动画：漂浮 */
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-12px);
+            }
+        }
+        .animate-float {
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        /* 动画：淡入 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+            animation: fadeIn 0.8s ease-out forwards;
+        }
+        
+        /* 隐藏类 */
+        .hidden {
+            display: none;
+        }
+        
+        /* 滚动条美化 (适用于弹窗内的记忆内容) */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: var(--color-particle);
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: var(--color-glow);
+        }
+    </style>
+</head>
+<body class="relative w-full h-screen overflow-hidden">
+
+    <!-- 3D 粒子背景 -->
+    <canvas id="three-bg"></canvas>
+
+    <!-- 加载覆盖层 -->
+    <div id="loading-overlay" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900 bg-opacity-50 backdrop-blur-sm transition-opacity duration-500">
+        <div class="w-16 h-16 border-4 border-t-transparent border-white rounded-full animate-spin"></div>
+        <p class="mt-4 text-lg text-white">正在潜入记忆之海...</p>
+    </div>
+
+    <!-- 主 UI 容器 -->
+    <div id="main-ui" class="relative z-10 flex items-center justify-center w-full h-full p-4">
+
+        <!-- ✨ 音乐开关 -->
+        <button id="music-toggle" class="fixed top-6 right-6 z-50 p-2 rounded-full glass-ui text-white opacity-70 hover:opacity-100 transition-opacity hidden" title="切换音乐">
+            <!-- Speaker On Icon -->
+            <svg id="icon-music-on" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+            </svg>
+            <!-- Speaker Off Icon (hidden by default) -->
+            <svg id="icon-music-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <line x1="22" x2="16" y1="9" y2="15"></line>
+                <line x1="16" x2="22" y1="9" y2="15"></line>
+            </svg>
+        </button>
+
+        <!-- 首页视图 -->
+        <div id="home-view" class="text-center hidden">
+            <h1 class="font-title text-5xl md:text-7xl text-white mb-6 animate-float" style="text-shadow: 0 0 20px var(--color-glow);">
+                让记忆在时光中漂流
+            </h1>
+            <div class="space-x-4">
+                <button id="btn-write" class="btn-glow font-title text-xl px-8 py-4 bg-[var(--color-glow)] text-[var(--color-bg)] rounded-full transition-all duration-300 hover:bg-white">
+                    放入记忆
+                </button>
+                <button id="btn-read" class="btn-glow font-title text-xl px-8 py-4 bg-transparent border-2 border-[var(--color-glow)] text-[var(--color-glow)] rounded-full transition-all duration-300 hover:bg-[var(--color-glow)] hover:text-[var(--color-bg)]">
+                    拾取记忆
+                </button>
+            </div>
+        </div>
+
+        <!-- 写入记忆 弹窗 (默认隐藏) -->
+        <div id="write-modal" class="glass-ui w-11/12 md:w-1/2 lg:w-1/3 p-8 rounded-3xl hidden">
+            <h2 class="font-title text-3xl text-center text-white mb-6">写下你的记忆</h2>
+            <textarea id="memory-textarea" class="w-full h-48 p-4 bg-transparent border-2 border-[var(--color-text)] rounded-xl text-white focus:border-[var(--color-glow)] transition-all duration-300 resize-none" placeholder="写下你想漂流的话..."></textarea>
+            <p id="write-error" class="text-red-400 text-sm mt-2 hidden">漂流瓶不能为空哦。</p>
+
+            <!-- ✨ NEW GEMINI WRITE HELPER START ✨ -->
+            <div class="mt-4 text-center">
+                <button id="btn-poeticize" class="btn-glow px-6 py-2 border-2 border-[var(--color-particle)] text-[var(--color-particle)] rounded-full text-sm font-bold transition-all duration-300 hover:bg-[var(--color-particle)] hover:text-white disabled:opacity-50 disabled:cursor-not-allowed" title="让AI帮您润色这段记忆">
+                    ✨ 诗化这段记忆
+                </button>
+                <div id="poeticize-loading" class="text-center py-2 hidden">
+                    <div class="w-5 h-5 border-2 border-t-transparent border-[var(--color-glow)] rounded-full animate-spin mx-auto"></div>
+                    <p class="mt-1 text-xs text-[var(--color-text)] opacity-70">正在构思...</p>
+                </div>
+            </div>
+            <!-- ✨ NEW GEMINI WRITE HELPER END ✨ -->
+
+            <div class="flex justify-between items-center mt-6">
+                <button class="btn-close px-6 py-2 text-gray-300 hover:text-white transition-colors">关闭</button>
+                <!-- FIX: 将 ID 从 btn-next 更改为 btn-submit -->
+                <button id="btn-submit" class="btn-glow px-8 py-3 bg-[var(--color-glow)] text-[var(--color-bg)] rounded-full font-bold transition-all duration-300">
+                    放入海中
+                </button>
+            </div>
+        </div>
+
+        <!-- 读取记忆 弹窗 (默认隐藏) -->
+        <div id="read-modal" class="glass-ui w-11/12 md:w-1/2 lg:w-1/3 p-8 rounded-3xl hidden">
+            <h2 class="font-title text-3xl text-center text-white mb-6">拾起的漂流瓶</h2>
+            
+            <div id="read-loading" class="text-center py-8">
+                <div class="w-8 h-8 border-4 border-t-transparent border-white rounded-full animate-spin mx-auto"></div>
+                <p class="mt-4 text-gray-300">正在从深海中打捞...</p>
+            </div>
+
+            <p id="read-empty" class="text-gray-400 text-center py-8 hidden">
+                记忆之海暂时空空如也... 不如，你来放入第一个？
+            </p>
+
+            <div id="read-content-wrapper" class="max-h-[200px] overflow-y-auto custom-scrollbar">
+                <p id="read-memory-content" class="text-white text-lg leading-relaxed whitespace-pre-wrap hidden">
+                    <!-- 记忆内容将加载到此处 -->
+                </p>
+            </div>
+
+            <!-- AI 解读区域 -->
+            <div id="gemini-response-area" class="mt-6 pt-4 border-t border-gray-700/50 hidden">
+                <div class="text-center mb-4">
+                    <button id="btn-interpret" class="btn-glow px-6 py-2 border-2 border-[var(--color-particle)] text-[var(--color-particle)] rounded-full text-sm font-bold transition-all duration-300 hover:bg-[var(--color-particle)] hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">
+                        ✨ 解读这段记忆
+                    </button>
+                </div>
+
+                <div id="gemini-loading" class="text-center py-2 hidden">
+                    <div class="w-5 h-5 border-2 border-t-transparent border-[var(--color-glow)] rounded-full animate-spin mx-auto"></div>
+                    <p class="mt-1 text-xs text-[var(--color-text)] opacity-70">星尘正在回应...</p>
+                </div>
+                
+                <p id="gemini-content" class="glass-ui p-4 text-[var(--color-glow)] text-sm leading-relaxed italic hidden">
+                    <!-- AI 解读内容将加载到此处 -->
+                </p>
+            </div>
+            
+            <div class="flex justify-between items-center mt-6">
+                <button class="btn-close px-6 py-2 text-gray-300 hover:text-white transition-colors">返回首页</button>
+                <button id="btn-next" class="btn-glow px-8 py-3 bg-[var(--color-glow)] text-[var(--color-bg)] rounded-full font-bold transition-all duration-300">
+                    下一个瓶子
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        // 导入 Firebase 模块
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            serverTimestamp,
+            query,
+            where,
+            limit,
+            getDocs,
+            documentId
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- 全局变量 ---
+        let db, auth, userId;
+        let scene, camera, renderer, particles;
+        let mouseX = 0, mouseY = 0; // 新增：鼠标位置
+        let audioInitialized = false; // 新增：音频状态
+        let threeReady = false; // 新增：加载状态
+        let firebaseReady = false; // 新增：加载状态
+        let isMuted = false; // 新增：音乐开关状态
+        
+        // DOM 元素
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const homeView = document.getElementById('home-view');
+        const writeModal = document.getElementById('write-modal');
+        const readModal = document.getElementById('read-modal');
+        const btnWrite = document.getElementById('btn-write');
+        const btnRead = document.getElementById('btn-read');
+        const btnSubmit = document.getElementById('btn-submit'); 
+        const btnNext = document.getElementById('btn-next');
+        const closeButtons = document.querySelectorAll('.btn-close');
+        const memoryTextarea = document.getElementById('memory-textarea');
+        const writeError = document.getElementById('write-error');
+        
+        // 写入助手 UI
+        const btnPoeticize = document.getElementById('btn-poeticize');
+        const poeticizeLoading = document.getElementById('poeticize-loading');
+
+        const readLoading = document.getElementById('read-loading');
+        const readContent = document.getElementById('read-memory-content');
+        const readEmpty = document.getElementById('read-empty');
+
+        // 音乐开关 DOM
+        const musicToggleBtn = document.getElementById('music-toggle');
+        const iconMusicOn = document.getElementById('icon-music-on');
+        const iconMusicOff = document.getElementById('icon-music-off');
+
+        // Gemini UI 元素
+        const geminiResponseArea = document.getElementById('gemini-response-area');
+        const btnInterpret = document.getElementById('btn-interpret');
+        const geminiLoading = document.getElementById('gemini-loading');
+        const geminiContent = document.getElementById('gemini-content');
+
+        // --- 音频与加载检查 ---
+
+        /**
+         * 检查 Three.js 和 Firebase 是否都已准备就绪
+         */
+        function checkReady() {
+            if (threeReady && firebaseReady) {
+                showEnterButton();
+            }
+        }
+
+        /**
+         * 显示“点击进入”按钮，并设置点击事件
+         */
+        function showEnterButton() {
+            const spinner = loadingOverlay.querySelector('div');
+            const text = loadingOverlay.querySelector('p');
+            
+            if (spinner) spinner.classList.add('hidden'); // 隐藏加载圈
+            if (text) {
+                text.textContent = "点击进入记忆之海";
+                text.classList.add('cursor-pointer', 'opacity-70', 'hover:opacity-100', 'transition-opacity');
+                text.classList.add('animate-pulse'); // 添加脉冲动画
+            }
+            
+            loadingOverlay.classList.add('cursor-pointer');
+            loadingOverlay.addEventListener('click', async () => {
+                await initAudio(); // 启动音频
+                loadingOverlay.classList.add('opacity-0'); // 淡出
+                
+                // 启动路由和显示第一个视图
+                handleRoute(); 
+                
+                setTimeout(() => loadingOverlay.classList.add('hidden'), 500);
+            }, { once: true }); // 点击事件只触发一次
+        }
+
+        /**
+         * 初始化 Tone.js 背景音乐
+         */
+        async function initAudio() {
+            if (audioInitialized) return;
+            try {
+                await Tone.start();
+                const reverb = new Tone.Reverb(6).toDestination(); // 创建混响效果
+                await reverb.generate();
+                
+                // 柔和的合成器音色 (旋律)
+                const synth = new Tone.PolySynth(Tone.Synth, {
+                    oscillator: { type: 'fmsine', modulationType: 'sine', modulationIndex: 3, harmonicity: 3.4 },
+                    envelope: { attack: 0.8, decay: 0.2, sustain: 0.5, release: 4 },
+                    filterEnvelope: { attack: 0.5, decay: 0, sustain: 1, release: 2, baseFrequency: 200, octaves: 7, exponent: 1.2 }
+                }).connect(reverb);
+                
+                // 氛围 "Pad" (底噪)
+                const pad = new Tone.PolySynth(Tone.Synth, {
+                    oscillator: { type: 'fatriangle', count: 3, spread: 30 },
+                    envelope: { attack: 3, decay: 0.1, sustain: 0.8, release: 3 }
+                }).toDestination();
+                pad.volume.value = -9; 
+                pad.connect(reverb);
+
+                const notes = ["C3", "G3", "Eb3", "Bb3"]; // 梦幻的和弦
+                
+                // 旋律循环：每小节随机播放一个音符
+                new Tone.Loop(time => {
+                    let note = notes[Math.floor(Math.random() * notes.length)];
+                    synth.triggerAttackRelease(note, "2n", time);
+                }, "1m").start("2m");
+                
+                // 底噪循环：每8小节播放一个长音
+                new Tone.Loop(time => {
+                    pad.triggerAttackRelease(notes[0], "8m", time);
+                }, "8m").start(0);
+
+                Tone.Transport.bpm.value = 65; // 缓慢的BPM
+                Tone.Transport.start();
+                audioInitialized = true;
+                console.log("音频已启动");
+
+                // 显示音乐开关
+                musicToggleBtn.classList.remove('hidden');
+                iconMusicOn.classList.remove('hidden');
+                iconMusicOff.classList.add('hidden');
+                
+            } catch (e) {
+                console.warn("音频初始化失败:", e);
+            }
+        }
+
+        /**
+         * 切换音乐静音
+         */
+        function toggleMusic() {
+            if (!audioInitialized) {
+                console.log("音频尚未初始化。");
+                return; 
+            }
+            
+            isMuted = !isMuted;
+            Tone.Master.mute = isMuted;
+            
+            if (isMuted) {
+                iconMusicOn.classList.add('hidden');
+                iconMusicOff.classList.remove('hidden');
+            } else {
+                iconMusicOn.classList.remove('hidden');
+                iconMusicOff.classList.add('hidden');
+            }
+        }
+
+        /**
+         * 鼠标移动事件处理
+         */
+        function onDocumentMouseMove(event) {
+            // 将鼠标位置从-1标准化到+1
+            mouseX = (event.clientX - window.innerWidth / 2) / (window.innerWidth / 2);
+            mouseY = (event.clientY - window.innerHeight / 2) / (window.innerHeight / 2);
+        }
+
+        // --- 1. Three.js 场景初始化 ---
+        function initThree() {
+            try {
+                const canvas = document.getElementById('three-bg');
+                renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(window.devicePixelRatio);
+
+                scene = new THREE.Scene();
+                // 添加柔和的雾效，让场景更有深度和梦幻感
+                scene.fog = new THREE.FogExp2(0x0b1a39, 0.0008); 
+
+                camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.z = 30; // 调整相机距离
+
+                // 创建粒子
+                const particleCount = 20000;
+                const positions = new Float32Array(particleCount * 3);
+                const colors = new Float32Array(particleCount * 3);
+                
+                const colorPalette = [
+                    new THREE.Color(0x5f4b8b), // 紫雾色
+                    new THREE.Color(0xf5d6a5), // 浅金色
+                    new THREE.Color(0x5cc9a6), // 青绿
+                    new THREE.Color(0xdfe8f7)  // 银白
+                ];
+
+                for (let i = 0; i < particleCount; i++) {
+                    const i3 = i * 3;
+                    
+                    // 粒子分布在更大的球体内
+                    const radius = 100;
+                    const u = Math.random();
+                    const v = Math.random();
+                    const theta = 2 * Math.PI * u;
+                    const phi = Math.acos(2 * v - 1);
+                    positions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+                    positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+                    positions[i3 + 2] = radius * Math.cos(phi) + (Math.random() - 0.5) * 50; // Z轴上更分散
+
+                    // 随机选择颜色
+                    const color = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+                    colors[i3] = color.r;
+                    colors[i3 + 1] = color.g;
+                    colors[i3 + 2] = color.b;
+                }
+
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+                // 创建一个圆点纹理
+                const texture = new THREE.CanvasTexture(createDotTexture());
+
+                const material = new THREE.PointsMaterial({
+                    size: 0.35, // 增大粒子
+                    vertexColors: true, // 使用顶点颜色
+                    map: texture,
+                    blending: THREE.AdditiveBlending, // 混合模式，产生发光效果
+                    transparent: true,
+                    depthWrite: false, // 避免粒子遮挡问题
+                    opacity: 0.9 // 提高不透明度
+                });
+
+                particles = new THREE.Points(geometry, material);
+                scene.add(particles);
+
+                // 窗口大小调整
+                window.addEventListener('resize', onWindowResize, false);
+                document.addEventListener('mousemove', onDocumentMouseMove, false); // 添加鼠标监听
+                
+                // 开始动画
+                animate();
+
+                threeReady = true; // 标记 Three.js 准备就绪
+                checkReady(); // 检查是否可以显示进入按钮
+            } catch (error) {
+                console.error("Three.js 初始化失败:", error);
+                // 即使 3D 失败，也显示 UI
+                threeReady = true; // 标记准备就绪
+                checkReady(); 
+            }
+        }
+        
+        // 创建圆点纹理 (用于粒子)
+        function createDotTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 32;
+            canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+            const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+            gradient.addColorStop(0, 'rgba(255,255,255,1)');
+            gradient.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 32, 32);
+            return canvas;
+        }
+
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const time = Date.now() * 0.00005;
+            
+            // 粒子系统缓慢旋转
+            if (particles) {
+                particles.rotation.y = time * 0.2;
+                particles.rotation.x = time * 0.1;
+            }
+            
+            // 相机缓慢移动，并受鼠标影响
+            const targetX = Math.sin(time * 0.1) * 3 + mouseX * 5; 
+            const targetY = -mouseY * 5;
+            const targetZ = 30 + Math.cos(time * 0.1) * 3; 
+
+            // 平滑过渡到目标位置
+            camera.position.x += (targetX - camera.position.x) * 0.02;
+            camera.position.y += (targetY - camera.position.y) * 0.02;
+            camera.position.z += (targetZ - camera.position.z) * 0.02;
+            
+            camera.lookAt(scene.position);
+
+            renderer.render(scene, camera);
+        }
+
+        // 窗口大小调整处理
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- 2. Firebase 初始化 ---
+        async function initFirebase() {
+            try {
+                // Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyCsekG7liDAgUGmRXFptc1enxQ25GIVS0",
+  authDomain: "memorydrifter-d4720.firebaseapp.com",
+  projectId: "memorydrifter-d4720",
+  storageBucket: "memorydrifter-d4720.firebasestorage.app",
+  messagingSenderId: "961926341645",
+  appId: "1:961926341645:web:e39ae44f08f1cb8b54a144",
+  measurementId: "G-WLDBT0M5SH"
+};
+
+                // 监听认证状态
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        console.log("已认证:", userId);
+                        // 认证成功，隐藏加载
+                        if (!firebaseReady) { 
+                            firebaseReady = true; 
+                            checkReady(); 
+                        }
+                    }
+                });
+
+                // 尝试使用自定义令牌登录，否则匿名登录
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                
+            } catch (error) {
+                console.error("Firebase 初始化或登录失败:", error);
+                // 即使 Firebase 失败，也显示 UI，但功能会受限
+                if (!firebaseReady) { 
+                    firebaseReady = true; 
+                    checkReady(); 
+                }
+                // 可以在 UI 上显示一个错误
+                // 使用自定义模态框替代 alert()
+                console.error("无法连接到记忆之海，请刷新重试。");
+            }
+        }
+        
+        // 获取漂流瓶的集合引用 (使用公共路径)
+        function getBottlesCollection() {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'memory-drifter-default';
+            // 路径：artifacts/{appId}/public/data/{collectionName}
+            return collection(db, `artifacts/${appId}/public/data/bottles`);
+        }
+
+        // --- 3. Gemini API 调用 ---
+        
+        /**
+         * 调用 Gemini API (带指数退避重试)
+         */
+        async function callGeminiApi(prompt, systemPrompt, maxRetries = 3) {
+            const apiKey = ""; // 由 Canvas 环境提供
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }] 
+                },
+            };
+
+            let attempt = 0;
+            while (attempt < maxRetries) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 429) { 
+                             throw new Error(`Rate limit exceeded (status: ${response.status})`);
+                        }
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+
+                    if (candidate && candidate.content?.parts?.[0]?.text) {
+                        return candidate.content.parts[0].text;
+                    } else {
+                        if (candidate && candidate.finishReason === 'SAFETY') {
+                            return "星尘的回应被宇宙的风吹散了... (内容可能触发了安全限制)";
+                        }
+                        throw new Error("未找到有效的 AI 回应内容。");
+                    }
+                } catch (error) {
+                    console.warn(`Gemini API attempt ${attempt + 1} failed:`, error.message);
+                    attempt++;
+                    if (attempt >= maxRetries) {
+                        throw error; 
+                    }
+                    // 指数退避
+                    const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000; 
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        /**
+         * 事件处理：解读记忆
+         */
+        async function interpretMemory() {
+            const memoryText = readContent.textContent;
+            if (!memoryText || memoryText.startsWith('打捞失败')) return;
+
+            geminiLoading.classList.remove('hidden');
+            geminiContent.classList.add('hidden');
+            btnInterpret.disabled = true;
+
+            try {
+                const interpretSystemPrompt = "你是一个温柔的解梦师或诗意的回应者。请用中文对以下这段匿名的记忆/思绪，给一段简短、治愈或有洞察力的回应。保持回复简洁，大约2-3句话。";
+                const interpretation = await callGeminiApi(memoryText, interpretSystemPrompt); 
+                geminiContent.textContent = interpretation;
+                geminiContent.classList.remove('hidden');
+            } catch (error) {
+                console.error("解读记忆失败:", error);
+                geminiContent.textContent = "星尘的回应... 迷失了方向。请稍后再试。";
+                geminiContent.classList.remove('hidden');
+            } finally {
+                geminiLoading.classList.add('hidden');
+                btnInterpret.disabled = false;
+            }
+        }
+
+        /**
+         * 诗化记忆
+         */
+        async function poeticizeMemory() {
+            const memoryText = memoryTextarea.value;
+            if (memoryText.trim() === "") {
+                writeError.textContent = "请先写点什么。";
+                writeError.classList.remove('hidden');
+                return;
+            }
+
+            writeError.classList.add('hidden');
+            poeticizeLoading.classList.remove('hidden');
+            btnPoeticize.disabled = true;
+            memoryTextarea.disabled = true;
+
+            try {
+                const poeticizeSystemPrompt = "你是一位诗人。请将以下中文文本润色为更富有诗意和意境的短句或短诗，保持原文的核心情感。请直接返回诗化后的文本，不要添加任何额外的解释或开场白。";
+                const poeticText = await callGeminiApi(memoryText, poeticizeSystemPrompt);
+                
+                memoryTextarea.value = poeticText.trim(); 
+
+            } catch (error) {
+                console.error("诗化记忆失败:", error);
+                writeError.textContent = "诗化失败，请稍后再试。";
+                writeError.classList.remove('hidden');
+            } finally {
+                poeticizeLoading.classList.add('hidden');
+                btnPoeticize.disabled = false;
+                memoryTextarea.disabled = false;
+            }
+        }
+
+
+        // --- 4. UI 交互逻辑 (Refactored for Routing) ---
+        
+        // 新增: 导航函数
+        function navigateTo(hash) {
+            window.location.hash = hash;
+            // 实际的视图切换将在 hashchange 事件中处理
+        }
+
+        /**
+         * 视图函数 (现在由 handleRoute 调用)
+         */
+        function showHome() {
+            homeView.classList.remove('hidden');
+            homeView.classList.add('animate-fadeIn');
+            
+            // 重置状态
+            geminiResponseArea.classList.add('hidden');
+            geminiContent.classList.add('hidden');
+            geminiLoading.classList.add('hidden');
+        }
+        
+        function showWriteModal() {
+            writeModal.classList.remove('hidden');
+            writeModal.classList.add('animate-fadeIn');
+            memoryTextarea.value = '';
+            memoryTextarea.disabled = false; 
+            writeError.classList.add('hidden');
+            poeticizeLoading.classList.add('hidden'); 
+            btnPoeticize.disabled = false; 
+        }
+        
+        function showReadModal() {
+            readModal.classList.remove('hidden');
+            readModal.classList.add('animate-fadeIn');
+            fetchRandomBottle(); // 打开时自动获取
+        }
+        
+        // 新增: 前端路由处理函数
+        function handleRoute() {
+            const hash = window.location.hash.substring(1) || 'home';
+            
+            // 确保所有视图重置隐藏状态
+            [homeView, writeModal, readModal].forEach(el => el.classList.add('hidden'));
+
+            switch (hash) {
+                case 'write':
+                    showWriteModal();
+                    break;
+                case 'read':
+                    showReadModal();
+                    break;
+                case 'home':
+                default:
+                    showHome();
+                    break;
+            }
+        }
+
+        // 提交漂流瓶
+        async function submitBottle() {
+            if (!db) {
+                // 使用 console 替代 alert
+                console.error("数据库连接失败，无法放入漂流瓶。"); 
+                writeError.textContent = "数据库连接失败，无法放入漂流瓶。";
+                writeError.classList.remove('hidden');
+                return;
+            }
+            
+            const memory = memoryTextarea.value.trim();
+            if (memory === "") {
+                writeError.classList.remove('hidden');
+                return;
+            }
+            
+            btnSubmit.disabled = true;
+            btnSubmit.textContent = "漂流中...";
+            writeError.classList.add('hidden');
+
+            try {
+                const bottlesCollectionRef = getBottlesCollection();
+                await addDoc(bottlesCollectionRef, {
+                    memory: memory,
+                    createdAt: serverTimestamp(),
+                    senderId: userId 
+                });
+                
+                // 成功动画，并导航回首页
+                writeModal.classList.remove('animate-fadeIn');
+                writeModal.classList.add('opacity-0', 'transition-opacity', 'duration-500');
+                
+                setTimeout(() => {
+                    navigateTo('home'); // 导航到首页
+                    writeModal.classList.remove('opacity-0'); // 重置
+                }, 500);
+
+            } catch (error) {
+                console.error("放入漂流瓶失败:", error);
+                writeError.textContent = "放入失败，请稍后再试。";
+                writeError.classList.remove('hidden');
+            } finally {
+                btnSubmit.disabled = false;
+                btnSubmit.textContent = "放入海中";
+            }
+        }
+        
+        // 获取随机漂流瓶
+        async function fetchRandomBottle() {
+            if (!db) {
+                console.error("数据库连接失败，无法拾取漂流瓶。");
+                readEmpty.textContent = "数据库连接失败。";
+                readEmpty.classList.remove('hidden');
+                return;
+            }
+            
+            readLoading.classList.remove('hidden');
+            readContent.classList.add('hidden');
+            readEmpty.classList.add('hidden');
+            btnNext.disabled = true;
+
+            // 重置 Gemini 区域
+            geminiResponseArea.classList.add('hidden');
+            geminiContent.classList.add('hidden');
+            geminiLoading.classList.add('hidden');
+            btnInterpret.disabled = false;
+
+            try {
+                const bottlesCollectionRef = getBottlesCollection();
+                
+                // 随机 ID 查询策略
+                const randomId = generateRandomFirestoreId();
+                
+                // 查找 >= 随机ID 的第一个
+                const q1 = query(
+                    bottlesCollectionRef, 
+                    where(documentId(), '>=', randomId),
+                    limit(1)
+                );
+                
+                let querySnapshot = await getDocs(q1);
+                
+                // 如果没找到，查找 < 随机ID 的第一个 (回绕)
+                if (querySnapshot.empty) {
+                    const q2 = query(
+                        bottlesCollectionRef, 
+                        where(documentId(), '<', randomId),
+                        limit(1)
+                    );
+                    querySnapshot = await getDocs(q2);
+                }
+                
+                if (querySnapshot.empty) {
+                    readEmpty.textContent = "记忆之海暂时空空如也... 不如，你来放入第一个？";
+                    readEmpty.classList.remove('hidden');
+                    geminiResponseArea.classList.add('hidden'); 
+                } else {
+                    const docData = querySnapshot.docs[0].data();
+                    readContent.textContent = docData.memory;
+                    readContent.classList.remove('hidden');
+                    geminiResponseArea.classList.remove('hidden'); 
+                }
+                
+            } catch (error) {
+                console.error("拾取漂流瓶失败:", error);
+                readEmpty.textContent = "打捞失败，请稍后再试。";
+                readEmpty.classList.remove('hidden');
+            } finally {
+                readLoading.classList.add('hidden');
+                btnNext.disabled = false;
+            }
+        }
+        
+        // 生成一个 Firestore 格式的随机 ID (20个字符)
+        function generateRandomFirestoreId() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let autoId = '';
+            for (let i = 0; i < 20; i++) {
+                autoId += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return autoId;
+        }
+
+        // --- 5. 事件监听器 ---
+        
+        // 导航按钮使用 navigateTo
+        btnWrite.addEventListener('click', () => navigateTo('write'));
+        btnRead.addEventListener('click', () => navigateTo('read'));
+        
+        // 关闭/返回按钮使用 navigateTo('home')
+        closeButtons.forEach(btn => {
+            btn.addEventListener('click', () => navigateTo('home'));
+        });
+
+        // 业务逻辑按钮
+        btnSubmit.addEventListener('click', submitBottle);
+        btnNext.addEventListener('click', fetchRandomBottle);
+        btnInterpret.addEventListener('click', interpretMemory);
+        btnPoeticize.addEventListener('click', poeticizeMemory); 
+        musicToggleBtn.addEventListener('click', toggleMusic); 
+        
+        // 路由监听器
+        window.addEventListener('hashchange', handleRoute);
+
+
+        // --- 6. 启动 ---
+        initThree();
+        initFirebase();
+        // 初始化时，如果加载完成，会通过 showEnterButton() 里的 click 事件调用 handleRoute()
+    </script>
+</body>
+</html>
